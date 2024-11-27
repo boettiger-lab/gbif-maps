@@ -1,5 +1,3 @@
-import ibis
-import streamlit as st
 import os
 
 base_url = "https://minio.carlboettiger.info"
@@ -10,14 +8,13 @@ db = duckdb.connect()
 db.install_extension("h3", repository = "community")
 db.close()
 
-
-
-
-
 # enable ibis to use built-in function from the h3 extension
+import ibis
+from ibis import _
 @ibis.udf.scalar.builtin
 def h3_cell_to_boundary_wkt	(array) -> str:
     ...
+
 
 # Configure write-access to source.coop
 import streamlit as st
@@ -54,8 +51,8 @@ def set_secrets(con):
     '''
     con.raw_sql(query)
 
-import minio
 
+import minio
 def s3_client(type="minio"):
     minio_key = st.secrets["MINIO_KEY"]
     minio_secret = st.secrets["MINIO_SECRET"]
@@ -70,7 +67,6 @@ def s3_client(type="minio"):
     
 
 import pydeck as pdk
-
 def HexagonLayer(data, v_scale = 1):
     return pdk.Layer(
             "H3HexagonLayer",
@@ -79,7 +75,7 @@ def HexagonLayer(data, v_scale = 1):
             extruded=True,
             get_elevation="value",
             get_hexagon="hex",
-            elevation_scale = 200 * v_scale,
+            elevation_scale = 50 * v_scale,
             elevation_range = [0,1],
             pickable=True,
             auto_highlight=True,
@@ -112,7 +108,6 @@ def DeckGlobe(layer):
     )
     return deck
 
-#leafmap.basemap_xyz_tiles()
 key = st.secrets['MAPTILER_KEY']
 terrain_style = {
     "version": 8,
@@ -147,3 +142,78 @@ terrain_style = {
     ],
     "terrain": {"source": "terrainSource", "exaggeration": .1},
 }
+####
+
+
+
+## grab polygon of a National park:
+import ibis
+from ibis import _
+def get_national_park(name = "Yosemite National Park", con = ibis.duckdb.connect()):
+    gdf = (con
+        .read_geo("/vsicurl/https://huggingface.co/datasets/cboettig/biodiversity/resolve/main/data/NPS.gdb")
+        .filter(_.UNIT_NAME == name)
+        .select(_.SHAPE)
+        .mutate(SHAPE = _.SHAPE.convert('EPSG:3857', 'EPSG:4326'))
+       ).execute()
+    return gdf
+
+# ick consider using data from Overture
+def get_country(name = "United States", con = ibis.duckdb.connect()):
+    gdf = (con
+        .read_geo("/vsicurl/https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_scale_rank.geojson")
+        .filter(_.sr_subunit == name, _.scalerank == 1)
+        .select(_.geom)
+       ).execute()
+    return gdf
+
+
+def get_state(name = "California", con = ibis.duckdb.connect()):
+    gdf = (con
+        .read_geo("/vsicurl/https://github.com/nvkelso/natural-earth-vector/raw/master/geojson/ne_110m_admin_1_states_provinces.geojson")
+        .filter(_.name == name)
+        .select(_.geom)
+       ).execute()
+    return gdf
+
+import geopandas as gpd
+def get_city(name = "Oakland", con = ibis.duckdb.connect()):
+    gdf = (con
+        .read_geo("/vsicurl/https://data.source.coop/cboettig/us-boundaries/mappinginequality.json")
+        .filter(_.city == name)
+        .agg(geom = _.geom.unary_union())
+       ).execute()
+    gdf = gpd.GeoDataFrame(geometry=gdf.simplify(.05))
+    return gdf 
+
+
+@st.cache_data
+def get_polygon(name = "Yosemite National Park", 
+                source = "National Parks",
+                _con = ibis.duckdb.connect()):
+    match source:
+        case 'National Parks':
+            gdf = get_national_park(name, _con)
+        case 'States':
+            gdf = get_state(name, _con)
+        case 'Countries':
+            gdf = get_country(name, _con)
+        case 'Cities':
+            gdf = get_city(name, _con)
+#        case _:
+#            gdf = get_national_park(name)
+            
+        
+    return gdf
+
+import hashlib
+import pandas as pd
+def unique_path(gdf_name, rank, taxa, zoom, distinct_taxa):
+    #gdf_hash = str(pd.util.hash_pandas_object(gdf).sum())
+    text = gdf_name + rank + taxa + str(zoom) + distinct_taxa
+    hash_object = hashlib.sha1(text.encode())
+    sig = hash_object.hexdigest()
+    dest = "cache/gbif_" + sig + ".json"
+    return dest
+
+
