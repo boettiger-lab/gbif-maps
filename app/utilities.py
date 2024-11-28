@@ -214,6 +214,10 @@ def get_polygon(name = "Yosemite National Park",
             gdf = get_country(name, _con)
         case 'Cities':
             gdf = get_city(name, _con)
+        case 'Custom':
+            gdf = gpd.read_file(name)
+        case "World":
+            gdf = None
         case _:
             gdf = None
     return gdf

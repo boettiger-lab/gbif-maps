@@ -6,10 +6,10 @@ import pydeck as pdk
 from utilities import *
 import leafmap.maplibregl as leafmap
 import requests
-
+import geopandas as gpd
 
 st.set_page_config(page_title="GBIF Observations Explorer", layout="wide")
-
+st.title("GBIF Observations Explorer")
 
 
 
@@ -24,70 +24,98 @@ col1, col2, col3, col4 = st.columns([1,3,3,3])
 
 # placed outside the form so that toggling this immediately updates the form options available
 with col1:
-    nunique = st.toggle("unique taxa", False)
+    st.markdown("#### Start 👇")
     area_source = st.radio("Area types", 
                            ["National Parks", 
                             "Cities", 
                             "States", 
                             "Countries",
-                            "World"]) 
+                            "World",
+                            "Custom"]) 
+    nunique = st.toggle("unique taxa only", False)
 
 
-
-area_selector = {
+# config with different default settings by area
+config = {
     "National Parks": {
         "names": con.read_parquet("park_names.parquet").select("name").execute(),
         "index": 161,
         "zoom": 7,
-        "default_v": 1.0,
+        "vertical": 1.0,
+        "rank_index": 2,
+        "taxa": "Aves",
     },
     "Cities": {
         "names": con.read_parquet("city_names.parquet").select("name").execute(),
         "index": 183,
         "zoom": 11,
-        "default_v": 0.1,
-
+        "vertical": 0.1,
+        "rank_index": 2,
+        "taxa": "Aves",
 
     },
     "States": {
         "names": con.read_parquet("state_names.parquet").select("name").execute(),
         "index": 4,
         "zoom": 5,
-        "default_v": 2.0,
-        
+        "vertical": 2.0,
+        "rank_index": 2,
+        "taxa": "Aves",       
     },
     "Countries": {
         "names": con.read_parquet("country_names.parquet").select("name").execute(),
         "index": 183,
         "zoom": 4,
-        "default_v": 4.0,
+        "vertical": 4.0,
+        "rank_index": 2,
+        "taxa": "Aves",        
     },
      "World": {
         "names": ["World"],
         "index": 0,
-        "zoom": 4,
-        "default_v": 4.0,
+        "zoom": 6,
+        "vertical": 4.0,
+        "rank_index": 6,
+        "taxa": "Balaenoptera musculus",
     },
+
+    "Custom": {
+        "zoom": 5,
+        "vertical": 2.0,
+        "rank_index": 2,
+        "taxa": "Aves",      
+    }
     
 }
 
 with st.form("my_form"):
     
     taxonomic_ranks = ["kingdom", "phylum", "class", "order", "family","genus", "species"]
-    area_info = area_selector[area_source]
+    default = config[area_source]
     
     with col2:
-        gdf_name = st.selectbox("Area", area_info["names"], index=area_info["index"])
+        st.markdown("#### 🗺️ Select an area of interest")
+        if area_source == "Custom":
+            geo_file = st.file_uploader("Polygon in EPSG:4326")
+            
+        else:
+            gdf_name = st.selectbox("Area", default["names"], index=default["index"])
     
     with col3:
+        st.markdown("#### 🐦 Select taxonomic groups")
+        ## add support for multiple taxa!
         rank = st.selectbox("Taxonomic Rank", options=taxonomic_ranks, index = 2)
-        taxa = st.text_input("taxa", "Aves")
+        taxa = st.text_input("taxa", default["taxa"])
         if nunique:
-            distinct_taxa = st.selectbox("count unique", options=taxonomic_ranks, index = 6)
+            distinct_taxa = st.selectbox("Count only unique occurrences by:", options=taxonomic_ranks, index = default["rank_index"])
 
     with col4: 
-        zoom = st.slider("H3 resolution", min_value=1, max_value=11, value = area_info["zoom"])
-        v_scale = st.number_input("vertical scale", min_value = 0.0, value = area_info["default_v"])
+        st.markdown('''
+        #### 🔎 Set spatial resolution
+        See [H3 cell size by zoom](https://h3geo.org/docs/core-library/restable/#cell-areas)
+        ''')
+        zoom = st.slider("H3 resolution", min_value=1, max_value=11, value = default["zoom"])
+        v_scale = st.number_input("vertical scale", min_value = 0.0, value = default["vertical"])
 
     submitted = st.form_submit_button("Go")
 
