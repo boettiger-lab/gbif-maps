@@ -5,6 +5,8 @@ from ibis import _
 import pydeck as pdk
 from utilities import *
 import leafmap.maplibregl as leafmap
+import requests
+
 
 st.set_page_config(page_title="GBIF Observations Explorer", layout="wide")
 
@@ -13,6 +15,7 @@ st.set_page_config(page_title="GBIF Observations Explorer", layout="wide")
 
 con = ibis.duckdb.connect(extensions=['httpfs', 'spatial', 'h3'])
 set_secrets(con) # s3 credentials
+#set_source_secrets(con)
 
 distinct_taxa = "" # default
 
@@ -86,8 +89,12 @@ def compute_hexes(_gdf, gdf_name, rank, taxa, zoom, distinct_taxa = ""):
 
     # FIXME check if dest exists in cache
     dest = unique_path(gdf_name, rank, taxa, zoom, distinct_taxa)
-
     bucket = "cboettig/gbif"
+    url = base_url + "/cboettig/gbif/" + dest
+
+    response = requests.head(url)
+    if response.status_code != 404:
+        return url
     
     # Much faster to filter to bbox first, then polygon
     geo_column = gdf.geometry.name
@@ -124,7 +131,6 @@ def compute_hexes(_gdf, gdf_name, rank, taxa, zoom, distinct_taxa = ""):
     query = ibis.to_sql(sel)
     con.raw_sql(f"COPY ({query}) TO 's3://{bucket}/{dest}' (FORMAT JSON, ARRAY true);")
 
-    url = base_url + "/cboettig/gbif/" + dest
     return url
 
 

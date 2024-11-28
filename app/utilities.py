@@ -29,11 +29,27 @@ def set_source_secrets(con):
         SECRET '{source_secret}',
         ENDPOINT 'data.source.coop',
         URL_STYLE 'path'
-    
     );
+    set THREADS=40;
     '''
+
+
     con.raw_sql(query)
 
+def set_aws_secrets(con):
+    source_key = st.secrets["SOURCE_KEY"]
+    source_secret = st.secrets["SOURCE_SECRET"]
+    
+    query=   f'''
+    CREATE OR REPLACE SECRET secret1 (
+        TYPE S3,
+        ENDPOINT 's3.us-west-2.amazonaws.com'
+    );
+    '''
+
+    # ENDPOINT 'data.source.coop',
+
+    con.raw_sql(query)
 
 # or write access to minio
 def set_secrets(con):   
