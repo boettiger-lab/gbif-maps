@@ -23,7 +23,7 @@ def set_source_secrets(con):
     source_secret = st.secrets["SOURCE_SECRET"]
     
     query=   f'''
-    CREATE OR REPLACE SECRET secret1 (
+    CREATE OR REPLACE SECRET source (
         TYPE S3,
         KEY_ID '{source_key}',
         SECRET '{source_secret}',
@@ -36,14 +36,12 @@ def set_source_secrets(con):
 
     con.raw_sql(query)
 
-def set_aws_secrets(con):
-    source_key = st.secrets["SOURCE_KEY"]
-    source_secret = st.secrets["SOURCE_SECRET"]
-    
+def set_aws_secrets(con):    
     query=   f'''
-    CREATE OR REPLACE SECRET secret1 (
+    CREATE OR REPLACE SECRET aws (
         TYPE S3,
-        ENDPOINT 's3.us-west-2.amazonaws.com'
+        ENDPOINT 's3.us-west-2.amazonaws.com',
+        SCOPE 's3://overturemaps-us-west-2/release/'
     );
     '''
 
@@ -61,8 +59,8 @@ def set_secrets(con):
         KEY_ID '{minio_key}',
         SECRET '{minio_secret}',
         ENDPOINT 'minio.carlboettiger.info',
-        URL_STYLE 'path'
-    
+        URL_STYLE 'path',
+        SCOPE 's3://cboettig/gbif'
     );
     '''
     con.raw_sql(query)
@@ -216,10 +214,8 @@ def get_polygon(name = "Yosemite National Park",
             gdf = get_country(name, _con)
         case 'Cities':
             gdf = get_city(name, _con)
-#        case _:
-#            gdf = get_national_park(name)
-            
-        
+        case _:
+            gdf = None
     return gdf
 
 import hashlib

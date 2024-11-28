@@ -15,6 +15,7 @@ st.set_page_config(page_title="GBIF Observations Explorer", layout="wide")
 
 con = ibis.duckdb.connect(extensions=['httpfs', 'spatial', 'h3'])
 set_secrets(con) # s3 credentials
+set_aws_secrets(con)
 #set_source_secrets(con)
 
 distinct_taxa = "" # default
@@ -28,7 +29,8 @@ with col1:
                            ["National Parks", 
                             "Cities", 
                             "States", 
-                            "Countries"]) 
+                            "Countries",
+                            "World"]) 
 
 
 
@@ -59,7 +61,12 @@ area_selector = {
         "index": 183,
         "zoom": 4,
         "default_v": 4.0,
-
+    },
+     "World": {
+        "names": ["World"],
+        "index": 0,
+        "zoom": 4,
+        "default_v": 4.0,
     },
     
 }
@@ -95,19 +102,22 @@ def compute_hexes(_gdf, gdf_name, rank, taxa, zoom, distinct_taxa = ""):
     response = requests.head(url)
     if response.status_code != 404:
         return url
-    
-    # Much faster to filter to bbox first, then polygon
-    geo_column = gdf.geometry.name
-    bounds =  _gdf.buffer(1).total_bounds
-    wkt = ibis.literal(_gdf[geo_column].iloc[0])
-    sel = (con
-           .read_parquet("s3://cboettig/gbif/2024-10-01/**")
-           .filter(_.decimallongitude >= bounds[0], 
-                   _.decimallongitude < bounds[2], 
-                   _.decimallatitude >= bounds[1], 
-                   _.decimallatitude < bounds[3])
-           .filter( _.geom.within(wkt))
-         )
+
+
+    sel = con.read_parquet("s3://cboettig/gbif/2024-10-01/**")
+
+    if gdf is not None:
+        # Much faster to filter to bbox first, then polygon
+        geo_column = gdf.geometry.name
+        bounds =  _gdf.buffer(1).total_bounds
+        wkt = ibis.literal(_gdf[geo_column].iloc[0])
+        sel = (sel
+               .filter(_.decimallongitude >= bounds[0], 
+                       _.decimallongitude < bounds[2], 
+                       _.decimallatitude >= bounds[1], 
+                       _.decimallatitude < bounds[3])
+               .filter( _.geom.within(wkt))
+             )
 
     sel = sel.filter(_[rank].isin([taxa]))
     
@@ -160,7 +170,8 @@ if submitted:
     layer = HexagonLayer(url, v_scale)
     m = leafmap.Map(style= terrain_style, center=[-120, 37.6], zoom=2, pitch=35, bearing=10)
 
-    m.add_gdf(gdf[[gdf.geometry.name]], "fill", paint = {"fill-opacity": 0.2}) # adds area of interest & zooms in
+    if gdf is not None:
+        m.add_gdf(gdf[[gdf.geometry.name]], "fill", paint = {"fill-opacity": 0.2}) # adds area of interest & zooms in
 
     if area_source == "Cities":
         m.add_pmtiles(mappinginequality, style=redlines, visible=True, opacity = 0.9,  fit_bounds=False)
