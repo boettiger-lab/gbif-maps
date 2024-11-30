@@ -104,7 +104,7 @@ with st.form("my_form"):
     with col3:
         st.markdown("#### 🐦 Select taxonomic groups")
         ## add support for multiple taxa!
-        rank = st.selectbox("Taxonomic Rank", options=taxonomic_ranks, index = 2)
+        rank = st.selectbox("Taxonomic Rank", options=taxonomic_ranks, index = default["rank_index"])
         taxa = st.text_input("taxa", default["taxa"])
         if nunique:
             distinct_taxa = st.selectbox("Count only unique occurrences by:", options=taxonomic_ranks, index = default["rank_index"])
